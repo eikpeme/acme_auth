@@ -24,7 +24,7 @@ const User = conn.define(
   {
     hooks: {
       beforeCreate: async (user) => {
-        // console.log("hello");
+
         if (user.password) {
           const salt = await bcrypt.genSaltSync(10);
           const hash = bcrypt.hashSync(user.password, salt);
@@ -35,11 +35,23 @@ const User = conn.define(
   }
 );
 
+const Note = conn.define(
+  "note",
+  {
+    text: {
+      type: STRING,
+    },
+  }
+
+);
+
+Note.belongsTo(User);
+User.hasMany(Note);
+
 User.byToken = async (token) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT);
-    // console.log(decoded);
-    // const user = await User.findByPk(token);
+
     if (decoded.userId) {
       user = await User.findByPk(decoded.userId);
       return user;
@@ -80,11 +92,28 @@ const syncAndSeed = async () => {
   const [lucy, moe, larry] = await Promise.all(
     credentials.map((credential) => User.create(credential))
   );
+
+  const notes = [
+    { text: "hello world" },
+    { text: "reminder to buy groceries" },
+    { text: "reminder to do laundry" },
+  ];
+  const [note1, note2, note3] = await Promise.all(
+    notes.map((note) => Note.create(note))
+  );
+  await lucy.setNotes(note1);
+  await moe.setNotes([note2, note3]);
+
   return {
     users: {
       lucy,
       moe,
       larry,
+    },
+    notes: {
+      note1,
+      note2,
+      note3,
     },
   };
 };
@@ -93,5 +122,7 @@ module.exports = {
   syncAndSeed,
   models: {
     User,
+    Note,
   },
 };
+
