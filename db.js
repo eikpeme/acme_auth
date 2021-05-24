@@ -1,7 +1,8 @@
 const { JsonWebTokenError } = require("jsonwebtoken");
 const Sequelize = require("sequelize");
 const { STRING } = Sequelize;
-const jwt = require("JsonWebToken");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 const config = {
   logging: false,
 };
@@ -14,15 +15,30 @@ const conn = new Sequelize(
   config
 );
 
-const User = conn.define("user", {
-  username: STRING,
-  password: STRING,
-});
+const User = conn.define(
+  "user",
+  {
+    username: STRING,
+    password: STRING,
+  },
+  {
+    hooks: {
+      beforeCreate: async (user) => {
+        // console.log("hello");
+        if (user.password) {
+          const salt = await bcrypt.genSaltSync(10);
+          const hash = bcrypt.hashSync(user.password, salt);
+          user.password = hash;
+        }
+      },
+    },
+  }
+);
 
 User.byToken = async (token) => {
   try {
-    const decoded = jwt.verify(token, "hello");
-    console.log(decoded);
+    const decoded = jwt.verify(token, process.env.JWT);
+    // console.log(decoded);
     // const user = await User.findByPk(token);
     if (decoded.userId) {
       user = await User.findByPk(decoded.userId);
@@ -42,11 +58,12 @@ User.authenticate = async ({ username, password }) => {
   const user = await User.findOne({
     where: {
       username,
-      password,
     },
   });
   if (user) {
-    return jwt.sign({ userId: user.id }, "hello");
+    if (await bcrypt.compare(password, user.password)) {
+      return jwt.sign({ userId: user.id }, process.env.JWT);
+    }
   }
   const error = Error("bad wha");
   error.status = 401;
